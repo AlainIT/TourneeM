@@ -1,12 +1,9 @@
 # Installer TourneeM sur ton iPhone
 
-L'app utilise une vraie carte (MapLibre), un module natif : elle ne peut pas s'installer via l'App Store "classique" pour l'instant (V1 non publiée) ni tourner dans l'app Expo Go. On passe par **EAS Build**, le service cloud d'Expo qui construit l'app pour toi (pas besoin de Mac ni de Xcode).
+L'app utilise une vraie carte (MapLibre), un module natif : elle ne peut pas s'installer via l'App Store "classique" pour l'instant (V1 non publiée) ni tourner dans l'app Expo Go. Deux voies possibles :
 
-Tout se fait depuis un navigateur, sauf une étape en ligne de commande si tu n'as pas encore de compte Apple Developer lié.
-
-## Coût à prévoir
-
-Apple exige un **compte Apple Developer Program (99 $/an)** pour installer une app sur un iPhone physique en dehors de l'App Store — même via EAS. C'est la seule dépense obligatoire. (Alternative gratuite : si tu as accès à un Mac, tu peux installer via Xcode avec un Apple ID gratuit, mais l'app expire au bout de 7 jours et il faut réinstaller à chaque fois — je peux détailler cette option si tu préfères.)
+- **Voie gratuite via un Mac** (ci-dessous) : signature avec un Apple ID gratuit, réinstallation à prévoir tous les 7 jours.
+- **Voie EAS Build + Apple Developer Program (99 $/an)** : aucun Mac requis, pas de réinstallation régulière. Détaillée en bas de page si tu changes d'avis plus tard.
 
 ## Étape 1 — Backend (obligatoire avant tout)
 
@@ -14,51 +11,79 @@ Suis `docs/SETUP.md`, sections 1 et 2 :
 1. Créer le projet Supabase → récupérer **URL** + **clé anon**
 2. Créer une clé **MapTiler**
 
-Garde ces 3 valeurs sous la main, on les renseignera à l'étape 4.
+## Étape 2 — Préparer le Mac
 
-## Étape 2 — Compte Expo (EAS)
+1. Installer **Xcode** depuis le Mac App Store (gratuit, ~10-15 Go, prévoir du temps de téléchargement). Le lancer une première fois pour accepter la licence et laisser les composants additionnels s'installer.
+2. Installer **Node.js** (LTS) : https://nodejs.org, ou via Homebrew (`brew install node`) si tu l'as.
+3. Récupérer le code :
+   ```bash
+   git clone https://github.com/AlainIT/TourneeM.git
+   cd TourneeM/mobile
+   npm install
+   ```
+4. Créer le fichier d'environnement :
+   ```bash
+   cp .env.example .env.local
+   ```
+   Puis éditer `.env.local` et renseigner les 3 valeurs (voir étape 1) :
+   ```
+   EXPO_PUBLIC_SUPABASE_URL=...
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=...
+   EXPO_PUBLIC_MAPTILER_KEY=...
+   ```
 
-1. Créer un compte gratuit sur https://expo.dev/signup
-2. Une fois connecté, cliquer sur **Create a project** (ou "New project")
-3. Lier le projet à ton dépôt GitHub `AlainIT/TourneeM` — Expo détecte automatiquement le dossier `mobile/` comme racine du projet Expo (sinon, le préciser manuellement dans les réglages du projet)
+## Étape 3 — Lier ton Apple ID gratuit à Xcode
 
-## Étape 3 — Compte Apple Developer
+1. Ouvrir Xcode → menu **Xcode → Settings… → Accounts**
+2. Cliquer **+** → **Apple ID** → se connecter avec un identifiant Apple classique (celui de ton iPhone convient, pas besoin de payer quoi que ce soit ici)
+3. Xcode crée automatiquement un "Personal Team" gratuit associé à ce compte
 
-1. Créer/rejoindre le programme sur https://developer.apple.com/programs/ (99 $/an, identifiant Apple classique)
-2. Rien d'autre à faire ici — EAS gère les certificats et profils de provisionnement à ta place au moment du build (il te demandera de te connecter avec ton Apple ID lors de la première build).
+## Étape 4 — Générer le projet natif et l'installer sur l'iPhone
 
-## Étape 4 — Variables d'environnement dans EAS
+1. Brancher l'iPhone au Mac en USB (ou WiFi, voir plus bas), et sur l'iPhone : **Faire confiance à cet ordinateur** si demandé
+2. Dans le dossier `mobile/` :
+   ```bash
+   npx expo prebuild --platform ios
+   ```
+   Ça génère un dossier `ios/` (projet Xcode natif) — normal que ce soit volumineux, il n'est pas commité dans le dépôt.
+3. Lancer directement l'installation sur l'iPhone en **configuration Release** (important : sans ça, l'app aurait besoin que le Mac reste allumé et connecté au même WiFi pour fonctionner) :
+   ```bash
+   npx expo run:ios --device --configuration Release
+   ```
+   Un menu te demande de choisir ton iPhone dans la liste des appareils détectés — le sélectionner. La première compilation prend 5-15 minutes.
 
-Dans le dashboard du projet Expo : **Project settings → Environment variables → Create**. Ajouter ces 3 variables, en cochant l'environnement **Preview** (et Production si tu comptes publier plus tard) :
+## Étape 5 — Autoriser l'app sur l'iPhone
 
-| Nom | Valeur |
-|---|---|
-| `EXPO_PUBLIC_SUPABASE_URL` | URL de ton projet Supabase |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | clé anon Supabase |
-| `EXPO_PUBLIC_MAPTILER_KEY` | ta clé MapTiler |
+Au premier lancement, iOS refuse l'app ("Développeur non fiable") :
+1. Sur l'iPhone : **Réglages → Général → VPN et gestion de l'appareil**
+2. Sélectionner le profil correspondant à ton Apple ID → **Faire confiance**
+3. Relancer l'app depuis l'écran d'accueil
 
-## Étape 5 — Lancer le build iOS
+## Étape 6 — Renouveler chaque semaine
 
-Dans le dashboard : **Builds → Create a build**
-- Plateforme : **iOS**
-- Profil : **preview**
-- Branche : `claude/medical-tour-app-architecture-fay3zt` (ou `main` une fois la branche fusionnée)
+Avec un Apple ID gratuit, la signature expire au bout de **7 jours** : l'app cesse de s'ouvrir. Pour la renouveler, reconnecter l'iPhone au Mac et relancer :
+```bash
+npx expo run:ios --device --configuration Release
+```
+Ça réinstalle en 1-2 minutes (pas besoin de repasser par toutes les étapes précédentes), sans perdre les données (elles sont sur Supabase, pas sur l'appareil).
 
-Lance le build. Ça prend **15 à 30 minutes**. La première fois, EAS te proposera d'enregistrer ton iPhone (un lien/QR code à ouvrir *depuis l'iPhone* pour capturer son identifiant — nécessaire pour l'installation ad-hoc).
+> Si cette contrainte hebdomadaire devient trop lourde à l'usage, on peut basculer sur la voie payante ci-dessous (99 $/an) qui supprime complètement cette limite — dis-le-moi quand tu veux.
 
-## Étape 6 — Installer sur l'iPhone
+---
 
-1. Une fois le build terminé, ouvre la page du build sur ton **iPhone** (Safari) et appuie sur **Install** — ou scanne le QR code affiché avec l'appareil photo de l'iPhone.
-2. iOS va afficher "Impossible d'installer l'app" la première fois : va dans **Réglages → Général → VPN et gestion de l'appareil**, sélectionne le profil développeur correspondant à ton compte Apple, et appuie sur **Faire confiance**.
-3. Relance l'installation depuis le lien EAS — l'app s'installe normalement sur l'écran d'accueil.
+## Alternative : EAS Build + Apple Developer Program (99 $/an, sans Mac)
 
-## Mises à jour ultérieures
+À réserver pour plus tard si la contrainte des 7 jours devient gênante.
 
-Tant que le code JavaScript seul change (pas de nouvelle dépendance native), tu n'as pas besoin de refaire un build complet : `eas update` (ou la mise à jour OTA automatique si configurée) pousse le changement directement sur l'app déjà installée. Si une dépendance native est ajoutée (rare, ex. une nouvelle lib de carte), il faut relancer un build comme à l'étape 5.
+1. Créer/rejoindre le programme sur https://developer.apple.com/programs/
+2. Créer un compte gratuit sur https://expo.dev/signup, créer un projet lié à `AlainIT/TourneeM` (dossier `mobile/`)
+3. Dans **Project settings → Environment variables**, ajouter `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_MAPTILER_KEY` pour l'environnement **Preview**
+4. **Builds → Create a build** → iOS → profil **preview** → branche `claude/medical-tour-app-architecture-fay3zt`
+5. Une fois le build prêt (15-30 min), ouvrir le lien sur l'iPhone et installer — même étape "Faire confiance" que ci-dessus, mais plus besoin de la refaire chaque semaine.
 
 ## Une fois que ça marche
 
 Dis-le-moi et je peux :
-- configurer les mises à jour OTA (`eas update`) pour que les futures évolutions arrivent sans réinstallation,
+- configurer les mises à jour OTA (`eas update`) pour que les futures évolutions du code JS arrivent sans réinstallation,
 - t'aider à passer en distribution TestFlight si tu veux la partager à d'autres personnes plus simplement,
 - préparer la publication App Store si vous décidez de la sortir officiellement.
