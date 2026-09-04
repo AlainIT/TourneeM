@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "TourneeM",
+    "slug": "tourneem",
+    "scheme": "tourneem",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tourneem.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TourneeM utilise votre position pour trier les médecins par proximité et définir le point de départ de votre tournée."
+      }
+    },
+    "android": {
+      "package": "com.tourneem.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TourneeM utilise votre position pour trier les médecins par proximité et définir le point de départ de votre tournée."
+        }
+      ],
+      "@maplibre/maplibre-react-native"
+    ]
+  }
+}

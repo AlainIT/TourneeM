@@ -1,0 +1,6 @@
+.DS_Store
+*.log
+
+# Supabase CLI local dev artifacts
+supabase/.branches/
+supabase/.temp/
