@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useSector } from '../../../hooks/useSector';
 import { CIBLAGE_LABEL, MODE_RECEPTION_LABEL } from '../../../lib/types';
 import { ciblageColor, colors, radius, spacing } from '../../../lib/theme';
 import { PrimaryButton } from '../../../components/PrimaryButton';
+import { openNavigationTo } from '../../../lib/navigation';
 
 function InfoRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
   return (
@@ -52,14 +53,14 @@ export default function DoctorDetail() {
   }
 
   function openNavigation() {
-    if (doctor?.latitude == null || doctor?.longitude == null) return;
-    const query = encodeURIComponent(adresseComplete || `${doctor.latitude},${doctor.longitude}`);
-    const url = Platform.select({
-      ios: `maps://?daddr=${query}`,
-      android: `google.navigation:q=${query}`,
-      default: `https://www.google.com/maps/dir/?api=1&destination=${query}`,
-    });
-    if (url) Linking.openURL(url).catch(() => {});
+    if (doctor?.latitude == null || doctor?.longitude == null) {
+      Alert.alert(
+        'Adresse non géolocalisée',
+        "Ce médecin n'a pas encore de coordonnées GPS valides (échec du géocodage à l'import). Vérifiez son adresse.",
+      );
+      return;
+    }
+    openNavigationTo({ lat: doctor.latitude, lon: doctor.longitude, label: doctor.nom });
   }
 
   return (

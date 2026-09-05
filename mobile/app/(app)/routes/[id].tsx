@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useSector } from '../../../hooks/useSector';
 import { markStopVisited, optimizeRoute, removeStopFromRoute } from '../../../lib/api/routes';
 import { markVisited } from '../../../lib/api/visits';
 import { exportCsvAndShare } from '../../../lib/export';
+import { openMultiStopNavigation } from '../../../lib/navigation';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { ciblageColor, colors, radius, spacing } from '../../../lib/theme';
 
@@ -48,15 +49,25 @@ export default function RouteDetail() {
   }
 
   function openNavigation() {
-    const withCoords = stops.filter((s) => s.doctor.latitude != null && s.doctor.longitude != null);
-    if (withCoords.length === 0) return;
-    const coords = withCoords.map((s) => `${s.doctor.latitude},${s.doctor.longitude}`);
-    const destination = coords[coords.length - 1];
-    const waypoints = coords.slice(0, -1).join('|');
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${destination}${
-      waypoints ? `&waypoints=${waypoints}` : ''
-    }&travelmode=driving`;
-    Linking.openURL(url).catch(() => {});
+    const withCoords = stops
+      .filter((s) => s.doctor.latitude != null && s.doctor.longitude != null)
+      .map((s) => ({ lat: s.doctor.latitude as number, lon: s.doctor.longitude as number }));
+    if (withCoords.length === 0) {
+      Alert.alert(
+        'Aucun médecin géolocalisé',
+        "Aucun arrêt de cette tournée n'a de coordonnées GPS valides.",
+      );
+      return;
+    }
+    if (withCoords.length < stops.length) {
+      Alert.alert(
+        'Certains arrêts sont ignorés',
+        `${stops.length - withCoords.length} médecin(s) sans coordonnées GPS valides ne figureront pas dans l'itinéraire.`,
+        [{ text: 'Continuer', onPress: () => openMultiStopNavigation(withCoords) }],
+      );
+      return;
+    }
+    openMultiStopNavigation(withCoords);
   }
 
   async function handleMarkStopVisited(stopId: string, doctorId: string) {
