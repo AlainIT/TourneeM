@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { NativeSyntheticEvent } from 'react-native';
-import { Camera, GeoJSONSource, Layer, Map as MapLibreMap, type CameraRef } from '@maplibre/maplibre-react-native';
+import {
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Map as MapLibreMap,
+  type CameraRef,
+  type GeoJSONSourceRef,
+} from '@maplibre/maplibre-react-native';
 import type { PressEventWithFeatures } from '@maplibre/maplibre-react-native';
 import type { Doctor } from '../lib/types';
 import { doctorsToGeoJSON } from '../lib/geojson';
@@ -10,9 +17,9 @@ import { colors } from '../lib/theme';
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const STYLE_URL = `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
 
-// Zoom cible à l'ouverture d'un cluster (= clusterMaxZoom ci-dessous, garantit
-// la dé-fragmentation complète du groupe sur lequel on vient de taper).
-const CLUSTER_EXPAND_ZOOM = 14;
+// Zoom maximal auquel les points sont encore regroupés en bulles ; au-delà,
+// chaque médecin a son propre marqueur.
+const CLUSTER_MAX_ZOOM = 16;
 
 // Paris par défaut si aucun médecin géocodé / pas encore de position utilisateur.
 const DEFAULT_CENTER: [number, number] = [2.3522, 48.8566];
@@ -26,6 +33,7 @@ interface Props {
 
 export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }: Props) {
   const cameraRef = useRef<CameraRef>(null);
+  const sourceRef = useRef<GeoJSONSourceRef>(null);
   const geojson = useMemo(() => doctorsToGeoJSON(doctors, selectedIds), [doctors, selectedIds]);
 
   const center: [number, number] = centerOn
@@ -46,16 +54,26 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
     cameraRef.current?.easeTo({ center: [centerOn.lon, centerOn.lat], zoom: 12, duration: 500 });
   }, [centerOn]);
 
-  function handlePress(event: NativeSyntheticEvent<PressEventWithFeatures>) {
+  async function handlePress(event: NativeSyntheticEvent<PressEventWithFeatures>) {
     const feature = event.nativeEvent.features?.[0];
     if (!feature) return;
 
+    const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
+
     if (feature.properties?.cluster) {
-      cameraRef.current?.easeTo({
-        center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
-        zoom: CLUSTER_EXPAND_ZOOM,
-        duration: 300,
-      });
+      // Zoom exact nécessaire pour éclater CETTE bulle précisément (et pas une
+      // autre) — un tap sur une bulle dense zoome moins loin qu'un tap sur une
+      // petite bulle voisine ; retaper sur la bulle restante zoome encore plus,
+      // jusqu'à voir chaque médecin individuellement.
+      const clusterId = feature.properties.cluster_id as number;
+      let targetZoom = CLUSTER_MAX_ZOOM;
+      try {
+        const expansionZoom = await sourceRef.current?.getClusterExpansionZoom(clusterId);
+        if (expansionZoom != null) targetZoom = Math.min(expansionZoom + 0.5, CLUSTER_MAX_ZOOM + 2);
+      } catch {
+        // Repli silencieux sur le zoom max de clustering si l'appel natif échoue.
+      }
+      cameraRef.current?.easeTo({ center: coordinates, zoom: targetZoom, duration: 400 });
       return;
     }
 
@@ -70,11 +88,12 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
         <Camera ref={cameraRef} initialViewState={{ center, zoom: 11 }} />
 
         <GeoJSONSource
+          ref={sourceRef}
           id="doctors-source"
           data={geojson}
           cluster
           clusterRadius={45}
-          clusterMaxZoom={CLUSTER_EXPAND_ZOOM}
+          clusterMaxZoom={CLUSTER_MAX_ZOOM}
           onPress={handlePress}
         >
           <Layer

@@ -10,8 +10,19 @@ import { useUserLocation } from '../../hooks/useUserLocation';
 import { DoctorMapView } from '../../components/DoctorMapView';
 import { FilterPanel } from '../../components/FilterPanel';
 import { DoctorListItem } from '../../components/DoctorListItem';
+import { DoctorQuickCard } from '../../components/DoctorQuickCard';
+import { CoverageBar } from '../../components/CoverageBar';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { applyFilters, DEFAULT_FILTERS, distinctSpecialites, sortDoctors, type DoctorFilters, type SortMode } from '../../lib/filters';
+import {
+  applyFilters,
+  computeCoverageByCiblage,
+  countActiveFilters,
+  DEFAULT_FILTERS,
+  distinctSpecialites,
+  sortDoctors,
+  type DoctorFilters,
+  type SortMode,
+} from '../../lib/filters';
 import { createRoute } from '../../lib/api/routes';
 import { colors, spacing } from '../../lib/theme';
 
@@ -39,10 +50,14 @@ export default function MapScreen() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [creatingRoute, setCreatingRoute] = useState(false);
+  const [quickViewId, setQuickViewId] = useState<string | null>(null);
 
   const specialites = useMemo(() => distinctSpecialites(doctors), [doctors]);
   const filtered = useMemo(() => applyFilters(doctors, filters, lastVisits), [doctors, filters, lastVisits]);
   const sorted = useMemo(() => sortDoctors(filtered, sortMode, location), [filtered, sortMode, location]);
+  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
+  const coverage = useMemo(() => computeCoverageByCiblage(doctors, lastVisits), [doctors, lastVisits]);
+  const quickViewDoctor = quickViewId ? sorted.find((d) => d.id === quickViewId) ?? null : null;
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -126,6 +141,11 @@ export default function MapScreen() {
           {!isTablet && (
             <Pressable style={styles.iconButton} onPress={() => setShowFilters(true)}>
               <Ionicons name="filter" size={20} color={colors.primary} />
+              {activeFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              )}
             </Pressable>
           )}
         </View>
@@ -147,6 +167,8 @@ export default function MapScreen() {
         </View>
       )}
 
+      <CoverageBar coverage={coverage} />
+
       <View style={styles.body}>
         {isTablet && (
           <View style={styles.sidePanel}>
@@ -157,14 +179,33 @@ export default function MapScreen() {
 
         <View style={styles.mainPanel}>
           {isTablet || viewMode === 'carte' ? (
-            <DoctorMapView doctors={sorted} selectedIds={selectedIds} onDoctorPress={openDoctor} centerOn={location} />
+            <DoctorMapView
+              doctors={sorted}
+              selectedIds={selectedIds}
+              onDoctorPress={(id) => setQuickViewId(id)}
+              centerOn={location}
+            />
           ) : (
             listContent
+          )}
+
+          {quickViewDoctor && (isTablet || viewMode === 'carte') && (
+            <DoctorQuickCard
+              doctor={quickViewDoctor}
+              lastVisitIso={lastVisits.get(quickViewDoctor.id)}
+              selected={selectedIds.has(quickViewDoctor.id)}
+              onClose={() => setQuickViewId(null)}
+              onOpenDetail={() => {
+                setQuickViewId(null);
+                openDoctor(quickViewDoctor.id);
+              }}
+              onToggleSelect={() => toggleSelect(quickViewDoctor.id)}
+            />
           )}
         </View>
       </View>
 
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 && !quickViewDoctor && (
         <View style={styles.fabBar}>
           <PrimaryButton
             label={`Créer la tournée du jour (${selectedIds.size})`}
@@ -213,6 +254,19 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row' },
   iconButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginLeft: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   iconButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: { color: colors.textInverse, fontSize: 10, fontWeight: '800' },
   segmented: { flexDirection: 'row', marginHorizontal: spacing.md, marginBottom: spacing.sm, backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
   segment: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: 10 },
   segmentActive: { backgroundColor: colors.primary },

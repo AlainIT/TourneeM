@@ -92,3 +92,32 @@ export function sortDoctors(doctors: Doctor[], sortMode: SortMode, userLocation:
 export function distinctSpecialites(doctors: Doctor[]): string[] {
   return Array.from(new Set(doctors.map((d) => d.specialite).filter((s): s is string => !!s))).sort();
 }
+
+export function countActiveFilters(filters: DoctorFilters): number {
+  return (
+    filters.ciblage.length +
+    filters.modeReception.length +
+    filters.specialite.length +
+    (filters.visitStatus !== 'all' ? 1 : 0) +
+    (filters.search.trim() ? 1 : 0)
+  );
+}
+
+export interface CiblageCoverage {
+  ciblage: Ciblage;
+  total: number;
+  visited: number;
+}
+
+// Couverture par priorité de ciblage : parmi les médecins actifs de chaque
+// catégorie, combien ont déjà été visités au moins une fois. Sert à repérer
+// en un coup d'œil où concentrer l'effort de visite (les P1 non couverts
+// d'abord, typiquement).
+export function computeCoverageByCiblage(doctors: Doctor[], lastVisitByDoctor: Map<string, string>): CiblageCoverage[] {
+  const order: Ciblage[] = ['P1', 'P2', 'P3'];
+  return order.map((ciblage) => {
+    const inCategory = doctors.filter((d) => d.actif && d.ciblage === ciblage);
+    const visited = inCategory.filter((d) => lastVisitByDoctor.has(d.id)).length;
+    return { ciblage, total: inCategory.length, visited };
+  });
+}
