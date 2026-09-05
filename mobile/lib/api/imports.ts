@@ -10,6 +10,16 @@ export interface ImportResult {
   nb_retires: number;
 }
 
+// Le chemin Storage de Supabase rejette espaces, accents et autres caractères
+// spéciaux ("Invalid key") : on ne nettoie que le chemin de stockage, le nom
+// affiché à l'utilisatrice (nom_fichier) reste inchangé.
+function sanitizeForStorageKey(filename: string): string {
+  return filename
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // retire les accents (diacritiques Unicode combinants)
+    .replace(/[^a-zA-Z0-9.\-_]/g, '_'); // remplace tout le reste (espaces, etc.) par "_"
+}
+
 // 1) pick un fichier xlsx/csv, 2) upload dans Storage (bucket "imports"),
 // 3) appelle l'Edge Function qui parse + géocode + upsert.
 export async function pickAndImportTargetingFile(sectorId: string): Promise<ImportResult | null> {
@@ -27,7 +37,7 @@ export async function pickAndImportTargetingFile(sectorId: string): Promise<Impo
   const response = await fetch(file.uri);
   const bytes = await response.arrayBuffer();
 
-  const storagePath = `${sectorId}/${Date.now()}-${file.name}`;
+  const storagePath = `${sectorId}/${Date.now()}-${sanitizeForStorageKey(file.name)}`;
   const { error: uploadErr } = await supabase.storage
     .from('imports')
     .upload(storagePath, bytes, {
