@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,6 +109,7 @@ export default function MapScreen() {
   );
 
   return (
+    <>
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>{sector?.nom ?? 'TourneeM'}</Text>
@@ -173,28 +174,35 @@ export default function MapScreen() {
         </View>
       )}
 
-      <Modal visible={!isTablet && showFilters} animationType="slide" onRequestClose={() => setShowFilters(false)}>
-        <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filtres</Text>
-            <Pressable
-              hitSlop={12}
-              style={styles.modalCloseButton}
-              onPress={() => setShowFilters(false)}
-            >
-              <Ionicons name="close" size={24} color={colors.textPrimary} />
-            </Pressable>
-          </View>
-          {filterPanel}
-          <View style={[styles.modalFooter, { paddingBottom: insets.bottom + spacing.sm }]}>
-            <PrimaryButton
-              label={`Voir les résultats (${sorted.length})`}
-              onPress={() => setShowFilters(false)}
-            />
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
+
+    {!isTablet && showFilters && (
+      // Superposition affichée en sœur du SafeAreaView (pas à l'intérieur, pour
+      // que le padding de zone sûre ne s'applique qu'une fois, via `insets` ci-dessous)
+      // et sans <Modal> : sur iPhone à encoche/Dynamic Island, <Modal> ouvre une
+      // fenêtre native séparée dont les zones tactiles se sont révélées peu
+      // fiables au-dessus de la caméra/capteur Face ID.
+      <View style={[styles.filtersOverlay, { paddingTop: insets.top }]}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Filtres</Text>
+          <Pressable
+            hitSlop={16}
+            style={styles.modalCloseButton}
+            onPress={() => setShowFilters(false)}
+          >
+            <Ionicons name="close" size={24} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+        {filterPanel}
+        <View style={styles.modalFooter}>
+          <PrimaryButton
+            label={`Voir les résultats (${sorted.length})`}
+            onPress={() => setShowFilters(false)}
+          />
+        </View>
+      </View>
+    )}
+    </>
   );
 }
 
@@ -219,7 +227,7 @@ const styles = StyleSheet.create({
   empty: { padding: spacing.xl, alignItems: 'center' },
   emptyText: { color: colors.textSecondary },
   fabBar: { position: 'absolute', bottom: spacing.md, left: spacing.md, right: spacing.md },
-  modalContainer: { flex: 1, backgroundColor: colors.surface },
+  filtersOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.surface },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
   modalCloseButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
