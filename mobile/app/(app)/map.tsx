@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useSector } from '../../hooks/useSector';
 import { useDoctors } from '../../hooks/useDoctors';
 import { useLastVisits } from '../../hooks/useLastVisits';
@@ -168,15 +168,19 @@ export default function MapScreen() {
       )}
 
       <Modal visible={!isTablet && showFilters} animationType="slide" onRequestClose={() => setShowFilters(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filtres</Text>
-            <Pressable onPress={() => setShowFilters(false)}>
-              <Ionicons name="close" size={24} color={colors.textPrimary} />
-            </Pressable>
-          </View>
-          {filterPanel}
-        </SafeAreaView>
+        {/* react-native-safe-area-context ne reçoit pas les insets du SafeAreaProvider racine à
+            l'intérieur d'un <Modal> (nouvelle fenêtre native côté iOS) : il faut son propre provider ici. */}
+        <SafeAreaProvider>
+          <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filtres</Text>
+              <Pressable onPress={() => setShowFilters(false)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+            {filterPanel}
+          </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
     </SafeAreaView>
   );
