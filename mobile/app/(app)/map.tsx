@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSector } from '../../hooks/useSector';
 import { useDoctors } from '../../hooks/useDoctors';
 import { useLastVisits } from '../../hooks/useLastVisits';
@@ -20,6 +20,12 @@ const TABLET_BREAKPOINT = 768;
 export default function MapScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width >= TABLET_BREAKPOINT;
+  // Calculé ici (dans l'arbre principal, où le SafeAreaProvider racine est bien
+  // initialisé) plutôt que dans le <Modal> ci-dessous : react-native-safe-area-context
+  // ne reçoit pas de mesures fiables du provider racine à l'intérieur d'un Modal
+  // iOS (nouvelle fenêtre native), ce qui faisait chevaucher "Filtres" avec la
+  // barre de statut et rendait la croix de fermeture (sous la zone système) inerte.
+  const insets = useSafeAreaInsets();
 
   const { data: sector } = useSector();
   const { data: doctors = [], isLoading, refetch, isRefetching } = useDoctors(sector?.id);
@@ -168,19 +174,25 @@ export default function MapScreen() {
       )}
 
       <Modal visible={!isTablet && showFilters} animationType="slide" onRequestClose={() => setShowFilters(false)}>
-        {/* react-native-safe-area-context ne reçoit pas les insets du SafeAreaProvider racine à
-            l'intérieur d'un <Modal> (nouvelle fenêtre native côté iOS) : il faut son propre provider ici. */}
-        <SafeAreaProvider>
-          <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filtres</Text>
-              <Pressable onPress={() => setShowFilters(false)}>
-                <Ionicons name="close" size={24} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-            {filterPanel}
-          </SafeAreaView>
-        </SafeAreaProvider>
+        <View style={[styles.modalContainer, { paddingTop: insets.top }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Filtres</Text>
+            <Pressable
+              hitSlop={12}
+              style={styles.modalCloseButton}
+              onPress={() => setShowFilters(false)}
+            >
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
+            </Pressable>
+          </View>
+          {filterPanel}
+          <View style={[styles.modalFooter, { paddingBottom: insets.bottom + spacing.sm }]}>
+            <PrimaryButton
+              label={`Voir les résultats (${sorted.length})`}
+              onPress={() => setShowFilters(false)}
+            />
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -207,6 +219,9 @@ const styles = StyleSheet.create({
   empty: { padding: spacing.xl, alignItems: 'center' },
   emptyText: { color: colors.textSecondary },
   fabBar: { position: 'absolute', bottom: spacing.md, left: spacing.md, right: spacing.md },
+  modalContainer: { flex: 1, backgroundColor: colors.surface },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalTitle: { fontSize: 18, fontWeight: '800', color: colors.textPrimary },
+  modalCloseButton: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  modalFooter: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
 });
