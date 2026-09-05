@@ -35,6 +35,15 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
   const cameraRef = useRef<CameraRef>(null);
   const sourceRef = useRef<GeoJSONSourceRef>(null);
   const geojson = useMemo(() => doctorsToGeoJSON(doctors, selectedIds), [doctors, selectedIds]);
+  // La mise à jour de la prop `data` d'un GeoJSONSource déjà monté ne se
+  // répercute pas de façon fiable sur les couches natives (constaté : la carte
+  // reste figée sur l'ancien jeu de points, voire vide, après un changement de
+  // filtres). On force un remontage propre de la source dès que le jeu de
+  // médecins affichés ou la sélection change réellement, via une clé dérivée.
+  const sourceKey = useMemo(
+    () => `${doctors.map((d) => d.id).sort().join(',')}|${Array.from(selectedIds).sort().join(',')}`,
+    [doctors, selectedIds],
+  );
 
   const center: [number, number] = centerOn
     ? [centerOn.lon, centerOn.lat]
@@ -88,6 +97,7 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
         <Camera ref={cameraRef} initialViewState={{ center, zoom: 11 }} />
 
         <GeoJSONSource
+          key={sourceKey}
           ref={sourceRef}
           id="doctors-source"
           data={geojson}
