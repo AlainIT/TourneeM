@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import type { NativeSyntheticEvent } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   Camera,
   GeoJSONSource,
   Layer,
   Map as MapLibreMap,
+  UserLocation,
   type CameraRef,
   type GeoJSONSourceRef,
 } from '@maplibre/maplibre-react-native';
 import type { PressEventWithFeatures } from '@maplibre/maplibre-react-native';
 import type { Doctor } from '../lib/types';
 import { doctorsToGeoJSON } from '../lib/geojson';
-import { colors } from '../lib/theme';
+import { colors, radius, spacing } from '../lib/theme';
 
 const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 const STYLE_URL = `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
@@ -91,10 +93,22 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
     }
   }
 
+  function handleLocateMe() {
+    if (!centerOn) {
+      Alert.alert(
+        'Position indisponible',
+        "Activez la localisation pour cette app dans les réglages de l'iPhone pour vous situer sur la carte.",
+      );
+      return;
+    }
+    cameraRef.current?.easeTo({ center: [centerOn.lon, centerOn.lat], zoom: 14, duration: 500 });
+  }
+
   return (
     <View style={styles.container}>
       <MapLibreMap style={styles.map} mapStyle={STYLE_URL}>
         <Camera ref={cameraRef} initialViewState={{ center, zoom: 11 }} />
+        <UserLocation animated accuracy />
 
         <GeoJSONSource
           key={sourceKey}
@@ -179,6 +193,10 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
           />
         </GeoJSONSource>
       </MapLibreMap>
+
+      <Pressable style={styles.locateButton} onPress={handleLocateMe} hitSlop={8}>
+        <Ionicons name="locate" size={22} color={colors.primary} />
+      </Pressable>
     </View>
   );
 }
@@ -186,4 +204,22 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
+  locateButton: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: spacing.md,
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 4,
+  },
 });
