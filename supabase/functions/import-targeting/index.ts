@@ -216,8 +216,8 @@ async function geocodeBatch(
   form.append("columns", "adresse");
   form.append("postcode", "code_postal");
   form.append("result_columns", "onekey");
-  form.append("result_columns", "result_latitude");
-  form.append("result_columns", "result_longitude");
+  form.append("result_columns", "latitude");
+  form.append("result_columns", "longitude");
   form.append("result_columns", "result_score");
 
   const res = await fetch("https://api-adresse.data.gouv.fr/search/csv/", {
@@ -235,8 +235,8 @@ async function geocodeBatch(
   const lines = text.split("\n").filter((l) => l.trim().length);
   const resultHeader = lines[0].split(";").map((h) => h.trim());
   const iOnekey = resultHeader.indexOf("onekey");
-  const iLat = resultHeader.indexOf("result_latitude");
-  const iLon = resultHeader.indexOf("result_longitude");
+  const iLat = resultHeader.indexOf("latitude");
+  const iLon = resultHeader.indexOf("longitude");
   const iScore = resultHeader.indexOf("result_score");
 
   for (const line of lines.slice(1)) {
