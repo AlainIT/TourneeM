@@ -3,7 +3,7 @@ import {
   addStopToRoute,
   getDraftRouteForDate,
   getOrCreateDraftRouteForDate,
-  getRouteStops,
+  getRouteStopsWithDoctors,
   removeStopFromRoute,
 } from '../lib/api/routes';
 
@@ -26,9 +26,14 @@ export function useTodayRoute(sectorId: string | undefined) {
   });
   const route = routeQuery.data ?? null;
 
+  // Même requête (avec jointure médecin) et même clé que l'écran de détail
+  // de tournée (useRouteStops) : des clés identiques avec des requêtes de
+  // formes différentes se marchaient dessus dans le cache React Query,
+  // l'écran de détail récupérant alors des arrêts sans `.doctor` et
+  // plantant sur `stop.doctor.ciblage`.
   const stopsQuery = useQuery({
     queryKey: ['route-stops', route?.id],
-    queryFn: () => getRouteStops(route!.id),
+    queryFn: () => getRouteStopsWithDoctors(route!.id),
     enabled: !!route,
   });
   const stops = stopsQuery.data ?? [];
