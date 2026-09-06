@@ -21,6 +21,11 @@ export async function markVisited(params: {
   return data;
 }
 
+export async function deleteVisit(visitId: string): Promise<void> {
+  const { error } = await supabase.from('visits').delete().eq('id', visitId);
+  if (error) throw error;
+}
+
 export async function listVisitsForDoctor(doctorId: string): Promise<Visit[]> {
   const { data, error } = await supabase
     .from('visits')

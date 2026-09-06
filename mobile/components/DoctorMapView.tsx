@@ -47,23 +47,36 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
     [doctors, selectedIds],
   );
 
-  const center: [number, number] = centerOn
-    ? [centerOn.lon, centerOn.lat]
-    : geojson.features[0]
-      ? (geojson.features[0].geometry.coordinates as [number, number])
-      : DEFAULT_CENTER;
+  // Simple point de départ avant que l'effet de cadrage ci-dessous ne prenne
+  // le relais dès que les médecins géocodés sont connus.
+  const center: [number, number] = geojson.features[0]
+    ? (geojson.features[0].geometry.coordinates as [number, number])
+    : DEFAULT_CENTER;
 
-  // `initialViewState` de la Camera ne s'applique qu'au montage. La position de
-  // l'utilisatrice arrive de façon asynchrone (et continue d'être mise à jour
-  // ensuite) : on ne recentre dessus qu'une seule fois, à sa toute première
-  // résolution, pour ne pas faire sauter la carte pendant que l'utilisatrice la
-  // consulte.
-  const hasCenteredOnUser = useRef(false);
+  // À l'ouverture, on cadre sur l'ensemble des médecins géocodés plutôt que sur
+  // la position de l'utilisatrice : sa position réelle (ex. son domicile) n'a
+  // souvent aucun rapport avec son secteur, ce qui faisait ouvrir la carte sur
+  // une zone vide sans aucun médecin visible. Le bouton de localisation reste
+  // disponible pour se recentrer sur soi à la demande. Une seule fois : on ne
+  // veut pas que la carte saute pendant qu'on la consulte.
+  const hasFitInitialBounds = useRef(false);
   useEffect(() => {
-    if (!centerOn || hasCenteredOnUser.current) return;
-    hasCenteredOnUser.current = true;
-    cameraRef.current?.easeTo({ center: [centerOn.lon, centerOn.lat], zoom: 12, duration: 500 });
-  }, [centerOn]);
+    if (hasFitInitialBounds.current) return;
+    const coords = geojson.features.map((f) => f.geometry.coordinates as [number, number]);
+    if (coords.length === 0) return;
+    hasFitInitialBounds.current = true;
+
+    if (coords.length === 1) {
+      cameraRef.current?.easeTo({ center: coords[0], zoom: 13, duration: 500 });
+      return;
+    }
+    const lons = coords.map((c) => c[0]);
+    const lats = coords.map((c) => c[1]);
+    cameraRef.current?.fitBounds(
+      [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)],
+      { padding: { top: 80, left: 50, right: 50, bottom: 80 }, duration: 600 },
+    );
+  }, [geojson]);
 
   async function handlePress(event: NativeSyntheticEvent<PressEventWithFeatures>) {
     const feature = event.nativeEvent.features?.[0];

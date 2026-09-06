@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useDoctor } from '../../../hooks/useDoctor';
-import { useDoctorVisits, useMarkVisited } from '../../../hooks/useDoctorVisits';
+import { useDeleteVisit, useDoctorVisits, useMarkVisited } from '../../../hooks/useDoctorVisits';
 import { useSector } from '../../../hooks/useSector';
 import { CIBLAGE_LABEL, MODE_RECEPTION_LABEL } from '../../../lib/types';
 import { ciblageColor, colors, radius, spacing } from '../../../lib/theme';
@@ -29,6 +29,7 @@ export default function DoctorDetail() {
   const { data: sector } = useSector();
   const { data: visits = [] } = useDoctorVisits(id);
   const markVisited = useMarkVisited(id, sector?.id);
+  const deleteVisit = useDeleteVisit(id, sector?.id);
   const [marking, setMarking] = useState(false);
 
   if (isLoading || !doctor) {
@@ -50,6 +51,13 @@ export default function DoctorDetail() {
     } finally {
       setMarking(false);
     }
+  }
+
+  function handleDeleteVisit(visitId: string) {
+    Alert.alert('Annuler cette visite', 'Cette visite sera définitivement supprimée.', [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: () => deleteVisit(visitId) },
+    ]);
   }
 
   function openNavigation() {
@@ -107,6 +115,14 @@ export default function DoctorDetail() {
               <View key={v.id} style={styles.visitRow}>
                 <Ionicons name="checkmark-circle" size={18} color={colors.success} />
                 <Text style={styles.visitDate}>{new Date(v.date_visite).toLocaleString('fr-FR')}</Text>
+                <View style={{ flex: 1 }} />
+                <Ionicons
+                  name="trash-outline"
+                  size={18}
+                  color={colors.textSecondary}
+                  hitSlop={12}
+                  onPress={() => handleDeleteVisit(v.id)}
+                />
               </View>
             ))
           )}

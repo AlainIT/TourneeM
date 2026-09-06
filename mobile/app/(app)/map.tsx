@@ -130,13 +130,16 @@ export default function MapScreen() {
         <Text style={styles.title}>{sector?.nom ?? 'TourneeM'}</Text>
         <View style={styles.headerActions}>
           <Pressable
-            style={[styles.iconButton, selectionMode && styles.iconButtonActive]}
+            style={[styles.selectionButton, selectionMode && styles.iconButtonActive]}
             onPress={() => {
               setSelectionMode((v) => !v);
               if (selectionMode) setSelectedIds(new Set());
             }}
           >
-            <Ionicons name="checkbox-outline" size={20} color={selectionMode ? colors.textInverse : colors.primary} />
+            <Ionicons name="checkbox-outline" size={18} color={selectionMode ? colors.textInverse : colors.primary} />
+            <Text style={[styles.selectionButtonText, selectionMode && styles.selectionButtonTextActive]}>
+              Sélection
+            </Text>
           </Pressable>
           {!isTablet && (
             <Pressable style={styles.iconButton} onPress={() => setShowFilters(true)}>
@@ -254,6 +257,18 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row' },
   iconButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginLeft: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   iconButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  selectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  selectionButtonText: { marginLeft: spacing.xs, fontSize: 13, fontWeight: '700', color: colors.primary },
+  selectionButtonTextActive: { color: colors.textInverse },
   filterBadge: {
     position: 'absolute',
     top: -4,
