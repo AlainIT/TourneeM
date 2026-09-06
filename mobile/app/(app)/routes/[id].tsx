@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRoute, useRouteStops } from '../../../hooks/useRoutes';
 import { useUserLocation } from '../../../hooks/useUserLocation';
 import { useSector } from '../../../hooks/useSector';
-import { markStopVisited, optimizeRoute, removeStopFromRoute } from '../../../lib/api/routes';
+import { deleteRoute, markStopVisited, optimizeRoute, removeStopFromRoute } from '../../../lib/api/routes';
 import { markVisited } from '../../../lib/api/visits';
 import { exportCsvAndShare } from '../../../lib/export';
 import { openMultiStopNavigation } from '../../../lib/navigation';
@@ -92,6 +92,25 @@ export default function RouteDetail() {
     ]);
   }
 
+  function handleDeleteRoute() {
+    Alert.alert(
+      'Supprimer cette tournée',
+      'Tous ses arrêts seront retirés. Cette action est définitive — tu pourras en recréer une nouvelle pour la même journée.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteRoute(id);
+            await queryClient.invalidateQueries({ queryKey: ['routes', sector?.id] });
+            router.back();
+          },
+        },
+      ],
+    );
+  }
+
   async function handleExportCsv() {
     setExporting(true);
     try {
@@ -128,7 +147,7 @@ export default function RouteDetail() {
         <View style={styles.header}>
           <Ionicons name="chevron-back" size={26} color={colors.primary} onPress={() => router.back()} />
           <Text style={styles.title}>{new Date(route.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-          <View style={{ width: 26 }} />
+          <Ionicons name="trash-outline" size={22} color={colors.danger} onPress={handleDeleteRoute} />
         </View>
 
         {route.distance_totale_km != null && (

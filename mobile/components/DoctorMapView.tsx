@@ -31,9 +31,13 @@ interface Props {
   selectedIds: Set<string>;
   onDoctorPress: (doctorId: string) => void;
   centerOn?: { lat: number; lon: number } | null;
+  // Le bandeau "Voir ma tournée du jour" (affiché par l'écran parent) occupe
+  // le bas de l'écran sur toute la largeur : on remonte le bouton de
+  // localisation au-dessus pour éviter qu'il ne soit recouvert.
+  bottomOffset?: number;
 }
 
-export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }: Props) {
+export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn, bottomOffset = 0 }: Props) {
   const cameraRef = useRef<CameraRef>(null);
   const sourceRef = useRef<GeoJSONSourceRef>(null);
   const geojson = useMemo(() => doctorsToGeoJSON(doctors, selectedIds), [doctors, selectedIds]);
@@ -209,7 +213,11 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
         </GeoJSONSource>
       </MapLibreMap>
 
-      <Pressable style={styles.locateButton} onPress={handleLocateMe} hitSlop={8}>
+      <Pressable
+        style={[styles.locateButton, bottomOffset > 0 && { bottom: spacing.md + bottomOffset }]}
+        onPress={handleLocateMe}
+        hitSlop={8}
+      >
         <Ionicons name="locate" size={22} color={colors.primary} />
       </Pressable>
     </View>

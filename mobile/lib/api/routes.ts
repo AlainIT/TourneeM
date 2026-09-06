@@ -105,6 +105,14 @@ export async function removeStopFromRoute(routeId: string, doctorId: string): Pr
   if (error) throw error;
 }
 
+// Supprime entièrement la tournée (et ses arrêts, en cascade) — pour
+// recommencer à zéro le même jour. L'historique de visites déjà enregistrées
+// est conservé (route_id repasse simplement à null dessus).
+export async function deleteRoute(routeId: string): Promise<void> {
+  const { error } = await supabase.from('routes').delete().eq('id', routeId);
+  if (error) throw error;
+}
+
 export async function markStopVisited(stopId: string): Promise<void> {
   const { error } = await supabase
     .from('route_stops')

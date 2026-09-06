@@ -170,6 +170,7 @@ export default function MapScreen() {
               selectedIds={selectedIds}
               onDoctorPress={(id) => setQuickViewId(id)}
               centerOn={location}
+              bottomOffset={selectedCount > 0 && !quickViewDoctor ? 64 : 0}
             />
           ) : (
             listContent
