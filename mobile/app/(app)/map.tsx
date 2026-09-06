@@ -129,18 +129,20 @@ export default function MapScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>{sector?.nom ?? 'TourneeM'}</Text>
         <View style={styles.headerActions}>
-          <Pressable
-            style={[styles.selectionButton, selectionMode && styles.iconButtonActive]}
-            onPress={() => {
-              setSelectionMode((v) => !v);
-              if (selectionMode) setSelectedIds(new Set());
-            }}
-          >
-            <Ionicons name="checkbox-outline" size={18} color={selectionMode ? colors.textInverse : colors.primary} />
-            <Text style={[styles.selectionButtonText, selectionMode && styles.selectionButtonTextActive]}>
-              Sélection
-            </Text>
-          </Pressable>
+          {(isTablet || viewMode === 'liste') && (
+            <Pressable
+              style={[styles.selectionButton, selectionMode && styles.iconButtonActive]}
+              onPress={() => {
+                setSelectionMode((v) => !v);
+                if (selectionMode) setSelectedIds(new Set());
+              }}
+            >
+              <Ionicons name="checkbox-outline" size={18} color={selectionMode ? colors.textInverse : colors.primary} />
+              <Text style={[styles.selectionButtonText, selectionMode && styles.selectionButtonTextActive]}>
+                Sélection
+              </Text>
+            </Pressable>
+          )}
           {!isTablet && (
             <Pressable style={styles.iconButton} onPress={() => setShowFilters(true)}>
               <Ionicons name="filter" size={20} color={colors.primary} />
