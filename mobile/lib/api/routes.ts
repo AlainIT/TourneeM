@@ -58,6 +58,29 @@ export async function createRoute(params: {
   return route;
 }
 
+// Dernière tournée "brouillon" pour une date donnée (typiquement aujourd'hui) —
+// permet d'ajouter des médecins directement à la tournée du jour sans étape
+// de création séparée.
+export async function getDraftRouteForDate(sectorId: string, date: string): Promise<DoctorRoute | null> {
+  const { data, error } = await supabase
+    .from('routes')
+    .select('*')
+    .eq('sector_id', sectorId)
+    .eq('date', date)
+    .eq('statut', 'brouillon')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function getOrCreateDraftRouteForDate(sectorId: string, date: string): Promise<DoctorRoute> {
+  const existing = await getDraftRouteForDate(sectorId, date);
+  if (existing) return existing;
+  return createRoute({ sectorId, date, doctorIds: [] });
+}
+
 export async function getRouteStopsWithDoctors(routeId: string): Promise<RouteStopWithDoctor[]> {
   const { data, error } = await supabase
     .from('route_stops')

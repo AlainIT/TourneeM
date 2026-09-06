@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.tourneem.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "TourneeM utilise votre position pour trier les médecins par proximité et définir le point de départ de votre tournée."
+        "NSLocationWhenInUseUsageDescription": "TourneeM utilise votre position pour trier les médecins par proximité et définir le point de départ de votre tournée.",
+        "LSApplicationQueriesSchemes": ["waze", "comgooglemaps"]
       }
     },
     "android": {

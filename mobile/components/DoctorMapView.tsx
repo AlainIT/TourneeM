@@ -78,19 +78,28 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
     );
   }, [geojson]);
 
-  function handlePress(event: NativeSyntheticEvent<PressEventWithFeatures>) {
+  async function handlePress(event: NativeSyntheticEvent<PressEventWithFeatures>) {
     const feature = event.nativeEvent.features?.[0];
     if (!feature) return;
 
     const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
 
     if (feature.properties?.cluster) {
-      // Un tap doit révéler en un seul geste exactement les médecins comptés
-      // dans la bulle : on zoome directement au-delà de CLUSTER_MAX_ZOOM (le
-      // niveau où plus aucun regroupement n'existe), plutôt qu'au zoom minimal
-      // d'éclatement d'un niveau (qui peut laisser des sous-bulles imbriquées
-      // et donner l'impression d'un nombre "faux" après un seul tap).
-      cameraRef.current?.easeTo({ center: coordinates, zoom: CLUSTER_MAX_ZOOM + 1, duration: 400 });
+      // Zoom pile au niveau où CETTE bulle précise éclate (ni plus, ni moins) :
+      // un zoom fixe trop élevé peut faire disparaître les points de l'écran
+      // (bulle éclatée mais recentrée ailleurs que la zone visible), un zoom
+      // trop faible peut laisser une sous-bulle imbriquée. Si le nombre reste
+      // trop élevé après éclatement, une nouvelle bulle (plus petite) apparaît
+      // naturellement — il suffit alors de retaper dessus.
+      const clusterId = feature.properties.cluster_id as number;
+      let targetZoom = CLUSTER_MAX_ZOOM;
+      try {
+        const expansionZoom = await sourceRef.current?.getClusterExpansionZoom(clusterId);
+        if (expansionZoom != null) targetZoom = expansionZoom + 0.05;
+      } catch {
+        // Repli silencieux sur le zoom max de clustering si l'appel natif échoue.
+      }
+      cameraRef.current?.easeTo({ center: coordinates, zoom: targetZoom, duration: 400 });
       return;
     }
 

@@ -7,6 +7,7 @@ import { useSector } from '../../hooks/useSector';
 import { useDoctors } from '../../hooks/useDoctors';
 import { useLastVisits } from '../../hooks/useLastVisits';
 import { useUserLocation } from '../../hooks/useUserLocation';
+import { useTodayRoute } from '../../hooks/useTodayRoute';
 import { DoctorMapView } from '../../components/DoctorMapView';
 import { FilterPanel } from '../../components/FilterPanel';
 import { DoctorListItem } from '../../components/DoctorListItem';
@@ -23,7 +24,6 @@ import {
   type DoctorFilters,
   type SortMode,
 } from '../../lib/filters';
-import { createRoute } from '../../lib/api/routes';
 import { colors, spacing } from '../../lib/theme';
 
 const TABLET_BREAKPOINT = 768;
@@ -48,9 +48,11 @@ export default function MapScreen() {
   const [viewMode, setViewMode] = useState<'carte' | 'liste'>('carte');
   const [showFilters, setShowFilters] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [creatingRoute, setCreatingRoute] = useState(false);
   const [quickViewId, setQuickViewId] = useState<string | null>(null);
+
+  // Ajouter un médecin (depuis la carte ou la liste) crée/complète directement
+  // la tournée du jour en base — pas d'étape de "création" séparée à oublier.
+  const { routeId: todayRouteId, selectedIds, count: selectedCount, toggle: toggleSelect } = useTodayRoute(sector?.id);
 
   const specialites = useMemo(() => distinctSpecialites(doctors), [doctors]);
   const filtered = useMemo(() => applyFilters(doctors, filters, lastVisits), [doctors, filters, lastVisits]);
@@ -59,30 +61,12 @@ export default function MapScreen() {
   const coverage = useMemo(() => computeCoverageByCiblage(doctors, lastVisits), [doctors, lastVisits]);
   const quickViewDoctor = quickViewId ? sorted.find((d) => d.id === quickViewId) ?? null : null;
 
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
   function openDoctor(id: string) {
     router.push(`/(app)/doctor/${id}`);
   }
 
-  async function handleCreateRoute() {
-    if (!sector || selectedIds.size === 0) return;
-    setCreatingRoute(true);
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const route = await createRoute({ sectorId: sector.id, date: today, doctorIds: Array.from(selectedIds) });
-      setSelectedIds(new Set());
-      setSelectionMode(false);
-      router.push(`/(app)/routes/${route.id}`);
-    } finally {
-      setCreatingRoute(false);
-    }
+  function goToTodayRoute() {
+    if (todayRouteId) router.push(`/(app)/routes/${todayRouteId}`);
   }
 
   const filterPanel = (
@@ -132,10 +116,7 @@ export default function MapScreen() {
           {(isTablet || viewMode === 'liste') && (
             <Pressable
               style={[styles.selectionButton, selectionMode && styles.iconButtonActive]}
-              onPress={() => {
-                setSelectionMode((v) => !v);
-                if (selectionMode) setSelectedIds(new Set());
-              }}
+              onPress={() => setSelectionMode((v) => !v)}
             >
               <Ionicons name="checkbox-outline" size={18} color={selectionMode ? colors.textInverse : colors.primary} />
               <Text style={[styles.selectionButtonText, selectionMode && styles.selectionButtonTextActive]}>
@@ -210,13 +191,9 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {selectedIds.size > 0 && !quickViewDoctor && (
+      {selectedCount > 0 && !quickViewDoctor && (
         <View style={styles.fabBar}>
-          <PrimaryButton
-            label={`Créer la tournée du jour (${selectedIds.size})`}
-            onPress={handleCreateRoute}
-            loading={creatingRoute}
-          />
+          <PrimaryButton label={`Voir ma tournée du jour (${selectedCount})`} onPress={goToTodayRoute} />
         </View>
       )}
 
