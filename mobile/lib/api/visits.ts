@@ -33,7 +33,13 @@ export async function listVisitsForDoctor(doctorId: string): Promise<Visit[]> {
 
 // Dernière visite par médecin, pour un secteur — sert au statut de visite
 // (jamais visité / non vu depuis X jours) sans charger tout l'historique.
-export async function listLastVisitPerDoctor(sectorId: string): Promise<Map<string, string>> {
+//
+// Un objet simple (et non un Map) : le cache React Query est persisté sur
+// l'appareil (AsyncStorage, pour la consultation hors-ligne) via
+// JSON.stringify/parse, qui ne sait pas sérialiser un Map — il redevient un
+// objet `{}` sans méthodes au redémarrage de l'app, ce qui faisait planter
+// l'app au premier rendu de l'écran carte après une persistance.
+export async function listLastVisitPerDoctor(sectorId: string): Promise<Record<string, string>> {
   const { data, error } = await supabase
     .from('visits')
     .select('doctor_id, date_visite')
@@ -41,11 +47,11 @@ export async function listLastVisitPerDoctor(sectorId: string): Promise<Map<stri
     .order('date_visite', { ascending: false });
   if (error) throw error;
 
-  const map = new Map<string, string>();
+  const result: Record<string, string> = {};
   for (const v of data ?? []) {
-    if (!map.has(v.doctor_id)) map.set(v.doctor_id, v.date_visite);
+    if (!(v.doctor_id in result)) result[v.doctor_id] = v.date_visite;
   }
-  return map;
+  return result;
 }
 
 export async function listVisitsInPeriod(sectorId: string, from: string, to: string): Promise<Visit[]> {

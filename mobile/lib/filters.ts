@@ -40,7 +40,7 @@ export function haversineKm(a: UserLocation, b: { lat: number; lon: number }): n
 export function applyFilters(
   doctors: Doctor[],
   filters: DoctorFilters,
-  lastVisitByDoctor: Map<string, string>,
+  lastVisitByDoctor: Record<string, string>,
 ): Doctor[] {
   const search = filters.search.trim().toLowerCase();
 
@@ -53,7 +53,7 @@ export function applyFilters(
     if (filters.specialite.length && (!d.specialite || !filters.specialite.includes(d.specialite))) return false;
 
     if (filters.visitStatus !== 'all') {
-      const lastVisit = lastVisitByDoctor.get(d.id);
+      const lastVisit = lastVisitByDoctor[d.id];
       if (filters.visitStatus === 'never' && lastVisit) return false;
       if (filters.visitStatus === 'visited' && !lastVisit) return false;
       if (filters.visitStatus === 'stale') {
@@ -113,11 +113,11 @@ export interface CiblageCoverage {
 // catégorie, combien ont déjà été visités au moins une fois. Sert à repérer
 // en un coup d'œil où concentrer l'effort de visite (les P1 non couverts
 // d'abord, typiquement).
-export function computeCoverageByCiblage(doctors: Doctor[], lastVisitByDoctor: Map<string, string>): CiblageCoverage[] {
+export function computeCoverageByCiblage(doctors: Doctor[], lastVisitByDoctor: Record<string, string>): CiblageCoverage[] {
   const order: Ciblage[] = ['P1', 'P2', 'P3'];
   return order.map((ciblage) => {
     const inCategory = doctors.filter((d) => d.actif && d.ciblage === ciblage);
-    const visited = inCategory.filter((d) => lastVisitByDoctor.has(d.id)).length;
+    const visited = inCategory.filter((d) => d.id in lastVisitByDoctor).length;
     return { ciblage, total: inCategory.length, visited };
   });
 }

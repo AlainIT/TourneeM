@@ -40,7 +40,7 @@ export default function MapScreen() {
 
   const { data: sector } = useSector();
   const { data: doctors = [], isLoading, refetch, isRefetching } = useDoctors(sector?.id);
-  const { data: lastVisits = new Map() } = useLastVisits(sector?.id);
+  const { data: lastVisits = {} } = useLastVisits(sector?.id);
   const { location } = useUserLocation();
 
   const [filters, setFilters] = useState<DoctorFilters>(DEFAULT_FILTERS);
@@ -108,7 +108,7 @@ export default function MapScreen() {
           doctor={item}
           selected={selectedIds.has(item.id)}
           selectionMode={selectionMode}
-          lastVisitIso={lastVisits.get(item.id)}
+          lastVisitIso={lastVisits[item.id]}
           onPress={() => openDoctor(item.id)}
           onToggleSelect={() => toggleSelect(item.id)}
         />
@@ -192,7 +192,7 @@ export default function MapScreen() {
           {quickViewDoctor && (isTablet || viewMode === 'carte') && (
             <DoctorQuickCard
               doctor={quickViewDoctor}
-              lastVisitIso={lastVisits.get(quickViewDoctor.id)}
+              lastVisitIso={lastVisits[quickViewDoctor.id]}
               selected={selectedIds.has(quickViewDoctor.id)}
               onClose={() => setQuickViewId(null)}
               onOpenDetail={() => {
