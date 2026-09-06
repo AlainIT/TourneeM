@@ -1,9 +1,13 @@
 // Edge Function: optimize-route
 //
-// Entrée : { route_id: string, start: { lat: number, lon: number } }
+// Entrée : { route_id: string, start: { lat: number, lon: number }, end?: { lat: number, lon: number } }
 // Effet : recalcule l'ordre de passage des arrêts de la tournée (route_stops)
 // par plus-proche-voisin + amélioration 2-opt sur distances Haversine, écrit
 // le nouvel ordre ainsi que la distance et la durée estimées sur `routes`.
+//
+// `end` (optionnel, ex. le domicile de la déléguée) fixe le point d'arrivée :
+// le trajet retour est alors inclus dans l'optimisation elle-même (l'ordre des
+// arrêts en tient compte, pas seulement la distance affichée en plus à la fin).
 //
 // V1 : distance à vol d'oiseau majorée d'un facteur de sinuosité (routes réelles),
 // pas d'appel à une API de routage payante. Le facteur et la vitesse moyenne sont
@@ -56,21 +60,33 @@ function nearestNeighborOrder(start: { lat: number; lon: number }, points: Point
   return ordered;
 }
 
-function tourLength(start: { lat: number; lon: number }, order: Point[]): number {
+function tourLength(
+  start: { lat: number; lon: number },
+  order: Point[],
+  end?: { lat: number; lon: number },
+): number {
   let total = 0;
   let prev = start;
   for (const p of order) {
     total += haversineKm(prev, p);
     prev = p;
   }
+  if (end) total += haversineKm(prev, end);
   return total;
 }
 
 // Amélioration 2-opt : élimine les croisements évidents de l'itinéraire glouton.
-function twoOpt(start: { lat: number; lon: number }, order: Point[]): Point[] {
+// Le point d'arrivée fixe (`end`, ex. le domicile) est inclus dans le calcul de
+// longueur à chaque candidat : l'algorithme réordonne donc bien les arrêts pour
+// terminer près de lui plutôt que de l'ignorer jusqu'au trajet retour final.
+function twoOpt(
+  start: { lat: number; lon: number },
+  order: Point[],
+  end?: { lat: number; lon: number },
+): Point[] {
   let improved = true;
   let best = order;
-  let bestLen = tourLength(start, best);
+  let bestLen = tourLength(start, best, end);
 
   while (improved) {
     improved = false;
@@ -81,7 +97,7 @@ function twoOpt(start: { lat: number; lon: number }, order: Point[]): Point[] {
           ...best.slice(i, j + 1).reverse(),
           ...best.slice(j + 1),
         ];
-        const candidateLen = tourLength(start, candidate);
+        const candidateLen = tourLength(start, candidate, end);
         if (candidateLen < bestLen - 1e-9) {
           best = candidate;
           bestLen = candidateLen;
@@ -96,10 +112,14 @@ function twoOpt(start: { lat: number; lon: number }, order: Point[]): Point[] {
 Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
-    const { route_id, start } = await req.json();
+    const { route_id, start, end: endInput } = await req.json();
     if (!route_id || !start || typeof start.lat !== "number" || typeof start.lon !== "number") {
       return new Response(JSON.stringify({ error: "route_id et start {lat, lon} requis" }), { status: 400 });
     }
+    const end: { lat: number; lon: number } | undefined =
+      endInput && typeof endInput.lat === "number" && typeof endInput.lon === "number"
+        ? { lat: endInput.lat, lon: endInput.lon }
+        : undefined;
 
     const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
       global: { headers: { Authorization: authHeader } },
@@ -133,8 +153,8 @@ Deno.serve(async (req) => {
     }
 
     const greedy = nearestNeighborOrder(start, points);
-    const optimized = twoOpt(start, greedy);
-    const distanceVolOiseau = tourLength(start, optimized);
+    const optimized = twoOpt(start, greedy, end);
+    const distanceVolOiseau = tourLength(start, optimized, end);
     const distanceEstimee = distanceVolOiseau * ROAD_SINUOSITY_FACTOR;
     const dureeMin = Math.round((distanceEstimee / AVERAGE_SPEED_KMH) * 60);
 

@@ -124,9 +124,10 @@ export async function markStopVisited(stopId: string): Promise<void> {
 export async function optimizeRoute(
   routeId: string,
   start: { lat: number; lon: number },
+  end?: { lat: number; lon: number },
 ): Promise<{ ordre: string[]; distance_totale_km: number; duree_totale_min: number }> {
   const { data, error } = await supabase.functions.invoke('optimize-route', {
-    body: { route_id: routeId, start },
+    body: { route_id: routeId, start, end },
   });
   if (error) throw error;
   return data;

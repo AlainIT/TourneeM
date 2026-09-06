@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRoute, useRouteStops } from '../../../hooks/useRoutes';
 import { useUserLocation } from '../../../hooks/useUserLocation';
 import { useSector } from '../../../hooks/useSector';
+import { useProfile } from '../../../hooks/useProfile';
 import { deleteRoute, markStopVisited, optimizeRoute, removeStopFromRoute } from '../../../lib/api/routes';
 import { markVisited } from '../../../lib/api/visits';
 import { exportCsvAndShare } from '../../../lib/export';
@@ -21,6 +22,11 @@ export default function RouteDetail() {
   const { data: stops = [], refetch } = useRouteStops(id);
   const { location } = useUserLocation();
   const { data: sector } = useSector();
+  const { data: profile } = useProfile();
+  const home =
+    profile?.domicile_lat != null && profile?.domicile_lon != null
+      ? { lat: profile.domicile_lat, lon: profile.domicile_lon }
+      : null;
 
   const [optimizing, setOptimizing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -39,7 +45,7 @@ export default function RouteDetail() {
     setError(null);
     setOptimizing(true);
     try {
-      await optimizeRoute(id, location);
+      await optimizeRoute(id, location, home ?? undefined);
       await invalidateAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Échec de l\'optimisation.');
@@ -59,15 +65,19 @@ export default function RouteDetail() {
       );
       return;
     }
+    // Le domicile (s'il est renseigné dans Profil) devient le dernier arrêt de
+    // l'itinéraire : Maps/Waze ramènent alors jusqu'à chez soi plutôt que de
+    // s'arrêter au dernier médecin visité.
+    const withHome = home ? [...withCoords, home] : withCoords;
     if (withCoords.length < stops.length) {
       Alert.alert(
         'Certains arrêts sont ignorés',
         `${stops.length - withCoords.length} médecin(s) sans coordonnées GPS valides ne figureront pas dans l'itinéraire.`,
-        [{ text: 'Continuer', onPress: () => openMultiStopNavigation(withCoords) }],
+        [{ text: 'Continuer', onPress: () => openMultiStopNavigation(withHome) }],
       );
       return;
     }
-    openMultiStopNavigation(withCoords);
+    openMultiStopNavigation(withHome);
   }
 
   async function handleMarkStopVisited(stopId: string, doctorId: string) {

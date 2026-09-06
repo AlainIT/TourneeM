@@ -78,6 +78,16 @@ export interface Sector {
   created_at: string;
 }
 
+export interface Profile {
+  id: string;
+  nom: string | null;
+  role: 'delegue' | 'manager';
+  adresse_domicile: string | null;
+  domicile_lat: number | null;
+  domicile_lon: number | null;
+  created_at: string;
+}
+
 export interface ImportRecord {
   id: string;
   sector_id: string;
