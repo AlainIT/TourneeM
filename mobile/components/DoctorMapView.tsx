@@ -78,26 +78,19 @@ export function DoctorMapView({ doctors, selectedIds, onDoctorPress, centerOn }:
     );
   }, [geojson]);
 
-  async function handlePress(event: NativeSyntheticEvent<PressEventWithFeatures>) {
+  function handlePress(event: NativeSyntheticEvent<PressEventWithFeatures>) {
     const feature = event.nativeEvent.features?.[0];
     if (!feature) return;
 
     const coordinates = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
 
     if (feature.properties?.cluster) {
-      // Zoom exact nécessaire pour éclater CETTE bulle précisément (et pas une
-      // autre) — un tap sur une bulle dense zoome moins loin qu'un tap sur une
-      // petite bulle voisine ; retaper sur la bulle restante zoome encore plus,
-      // jusqu'à voir chaque médecin individuellement.
-      const clusterId = feature.properties.cluster_id as number;
-      let targetZoom = CLUSTER_MAX_ZOOM;
-      try {
-        const expansionZoom = await sourceRef.current?.getClusterExpansionZoom(clusterId);
-        if (expansionZoom != null) targetZoom = Math.min(expansionZoom + 0.5, CLUSTER_MAX_ZOOM + 2);
-      } catch {
-        // Repli silencieux sur le zoom max de clustering si l'appel natif échoue.
-      }
-      cameraRef.current?.easeTo({ center: coordinates, zoom: targetZoom, duration: 400 });
+      // Un tap doit révéler en un seul geste exactement les médecins comptés
+      // dans la bulle : on zoome directement au-delà de CLUSTER_MAX_ZOOM (le
+      // niveau où plus aucun regroupement n'existe), plutôt qu'au zoom minimal
+      // d'éclatement d'un niveau (qui peut laisser des sous-bulles imbriquées
+      // et donner l'impression d'un nombre "faux" après un seul tap).
+      cameraRef.current?.easeTo({ center: coordinates, zoom: CLUSTER_MAX_ZOOM + 1, duration: 400 });
       return;
     }
 
