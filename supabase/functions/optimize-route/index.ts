@@ -140,11 +140,27 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    await Promise.all(
+    // `route_stops` a une contrainte unique (route_id, ordre) : écrire toutes les
+    // positions finales en parallèle peut faire collisionner transitoirement deux
+    // arrêts qui échangent leurs positions (ex. 1<->3), et cet échec passait
+    // silencieux (le résultat de l'update n'était pas vérifié). On passe donc par
+    // des positions temporaires négatives (jamais en conflit avec les positions
+    // existantes ni finales) avant d'écrire les positions définitives.
+    const tempUpdates = await Promise.all(
+      optimized.map((p, i) =>
+        admin.from("route_stops").update({ ordre: -(i + 1) }).eq("route_id", route_id).eq("doctor_id", p.id)
+      ),
+    );
+    const tempErr = tempUpdates.find((r) => r.error)?.error;
+    if (tempErr) throw tempErr;
+
+    const finalUpdates = await Promise.all(
       optimized.map((p, i) =>
         admin.from("route_stops").update({ ordre: i + 1 }).eq("route_id", route_id).eq("doctor_id", p.id)
       ),
     );
+    const finalErr = finalUpdates.find((r) => r.error)?.error;
+    if (finalErr) throw finalErr;
 
     await admin
       .from("routes")
