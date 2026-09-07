@@ -1,7 +1,8 @@
 import type { Ciblage, Doctor, ModeReception } from './types';
 import type { UserLocation } from '../hooks/useUserLocation';
+import { isOverdue } from './reminders';
 
-export type VisitStatusFilter = 'all' | 'never' | 'visited' | 'stale';
+export type VisitStatusFilter = 'all' | 'never' | 'visited' | 'stale' | 'retard';
 
 export interface DoctorFilters {
   ciblage: Ciblage[];
@@ -59,6 +60,7 @@ export function applyFilters(
       if (filters.visitStatus === 'stale') {
         if (lastVisit && daysSince(lastVisit) < filters.staleDays) return false;
       }
+      if (filters.visitStatus === 'retard' && !isOverdue(d, lastVisit)) return false;
     }
 
     if (search) {

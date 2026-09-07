@@ -20,6 +20,7 @@ const VISIT_STATUS_OPTIONS: { value: VisitStatusFilter; label: string }[] = [
   { value: 'never', label: 'Jamais visité' },
   { value: 'visited', label: 'Déjà visité' },
   { value: 'stale', label: 'Non vu depuis 60j+' },
+  { value: 'retard', label: 'En retard (auto)' },
 ];
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'nom', label: 'Nom' },

@@ -13,6 +13,7 @@ import { FilterPanel } from '../../components/FilterPanel';
 import { DoctorListItem } from '../../components/DoctorListItem';
 import { DoctorQuickCard } from '../../components/DoctorQuickCard';
 import { CoverageBar } from '../../components/CoverageBar';
+import { RemindersBanner } from '../../components/RemindersBanner';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import {
   applyFilters,
@@ -24,6 +25,7 @@ import {
   type DoctorFilters,
   type SortMode,
 } from '../../lib/filters';
+import { listOverdueDoctors } from '../../lib/reminders';
 import { colors, spacing } from '../../lib/theme';
 
 const TABLET_BREAKPOINT = 768;
@@ -59,6 +61,7 @@ export default function MapScreen() {
   const sorted = useMemo(() => sortDoctors(filtered, sortMode, location), [filtered, sortMode, location]);
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
   const coverage = useMemo(() => computeCoverageByCiblage(doctors, lastVisits), [doctors, lastVisits]);
+  const overdueCount = useMemo(() => listOverdueDoctors(doctors, lastVisits).length, [doctors, lastVisits]);
   const quickViewDoctor = quickViewId ? sorted.find((d) => d.id === quickViewId) ?? null : null;
 
   function openDoctor(id: string) {
@@ -153,6 +156,16 @@ export default function MapScreen() {
         </View>
       )}
 
+      <RemindersBanner
+        count={overdueCount}
+        active={filters.visitStatus === 'retard'}
+        onPress={() =>
+          setFilters((f) => ({
+            ...f,
+            visitStatus: f.visitStatus === 'retard' ? 'all' : 'retard',
+          }))
+        }
+      />
       <CoverageBar coverage={coverage} />
 
       <View style={styles.body}>
