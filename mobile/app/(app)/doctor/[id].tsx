@@ -9,6 +9,7 @@ import { useSector } from '../../../hooks/useSector';
 import { CIBLAGE_LABEL, MODE_RECEPTION_LABEL } from '../../../lib/types';
 import { ciblageColor, colors, radius, spacing } from '../../../lib/theme';
 import { PrimaryButton } from '../../../components/PrimaryButton';
+import { TextField } from '../../../components/TextField';
 import { openNavigationTo } from '../../../lib/navigation';
 
 function InfoRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
@@ -31,6 +32,7 @@ export default function DoctorDetail() {
   const markVisited = useMarkVisited(id, sector?.id);
   const deleteVisit = useDeleteVisit(id, sector?.id);
   const [marking, setMarking] = useState(false);
+  const [note, setNote] = useState('');
 
   if (isLoading || !doctor) {
     return (
@@ -47,7 +49,8 @@ export default function DoctorDetail() {
   async function handleMarkVisited() {
     setMarking(true);
     try {
-      await markVisited();
+      await markVisited(note.trim() || undefined);
+      setNote('');
     } finally {
       setMarking(false);
     }
@@ -102,6 +105,15 @@ export default function DoctorDetail() {
           </View>
 
           <View style={styles.actions}>
+            <TextField
+              label="Note de visite (facultatif)"
+              placeholder="Échantillons remis, sujets abordés, à relancer..."
+              value={note}
+              onChangeText={setNote}
+              multiline
+              numberOfLines={3}
+              style={styles.noteInput}
+            />
             <PrimaryButton label="Marquer comme visité" onPress={handleMarkVisited} loading={marking} />
             <View style={{ height: spacing.sm }} />
             <PrimaryButton label="Ouvrir l'itinéraire" onPress={openNavigation} variant="secondary" />
@@ -112,17 +124,20 @@ export default function DoctorDetail() {
             <Text style={styles.emptyText}>Jamais visité.</Text>
           ) : (
             visits.map((v) => (
-              <View key={v.id} style={styles.visitRow}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={styles.visitDate}>{new Date(v.date_visite).toLocaleString('fr-FR')}</Text>
-                <View style={{ flex: 1 }} />
-                <Ionicons
-                  name="trash-outline"
-                  size={18}
-                  color={colors.textSecondary}
-                  hitSlop={12}
-                  onPress={() => handleDeleteVisit(v.id)}
-                />
+              <View key={v.id} style={styles.visitCard}>
+                <View style={styles.visitRow}>
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                  <Text style={styles.visitDate}>{new Date(v.date_visite).toLocaleString('fr-FR')}</Text>
+                  <View style={{ flex: 1 }} />
+                  <Ionicons
+                    name="trash-outline"
+                    size={18}
+                    color={colors.textSecondary}
+                    hitSlop={12}
+                    onPress={() => handleDeleteVisit(v.id)}
+                  />
+                </View>
+                {v.note && <Text style={styles.visitNote}>{v.note}</Text>}
               </View>
             ))
           )}
@@ -148,6 +163,9 @@ const styles = StyleSheet.create({
   actions: { marginTop: spacing.lg },
   sectionTitle: { marginTop: spacing.lg, marginBottom: spacing.sm, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', fontSize: 12 },
   emptyText: { color: colors.textSecondary },
-  visitRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs },
+  noteInput: { minHeight: 70, textAlignVertical: 'top' },
+  visitCard: { paddingVertical: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border },
+  visitRow: { flexDirection: 'row', alignItems: 'center' },
   visitDate: { marginLeft: spacing.sm, color: colors.textPrimary },
+  visitNote: { marginLeft: 26, marginTop: 2, marginBottom: spacing.xs, color: colors.textSecondary, fontSize: 13 },
 });

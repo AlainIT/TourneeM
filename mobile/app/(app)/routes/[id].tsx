@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -80,12 +80,31 @@ export default function RouteDetail() {
     openMultiStopNavigation(withHome);
   }
 
-  async function handleMarkStopVisited(stopId: string, doctorId: string) {
+  async function finishMarkStopVisited(stopId: string, doctorId: string, note?: string) {
     if (!sector) return;
     await markStopVisited(stopId);
-    await markVisited({ doctorId, sectorId: sector.id, routeId: id });
+    await markVisited({ doctorId, sectorId: sector.id, routeId: id, note });
     await invalidateAll();
     await queryClient.invalidateQueries({ queryKey: ['visits', 'last-per-doctor', sector.id] });
+  }
+
+  function handleMarkStopVisited(stopId: string, doctorId: string) {
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Marquer comme visité',
+        'Note de visite (facultatif) : échantillons remis, sujets abordés...',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Valider',
+            onPress: (note?: string) => finishMarkStopVisited(stopId, doctorId, note?.trim() || undefined),
+          },
+        ],
+        'plain-text',
+      );
+      return;
+    }
+    finishMarkStopVisited(stopId, doctorId);
   }
 
   function handleRemoveStop(doctorId: string) {
