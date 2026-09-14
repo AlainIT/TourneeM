@@ -14,6 +14,7 @@ import { DoctorListItem } from '../../components/DoctorListItem';
 import { DoctorQuickCard } from '../../components/DoctorQuickCard';
 import { CoverageBar } from '../../components/CoverageBar';
 import { RemindersBanner } from '../../components/RemindersBanner';
+import { SuggestRouteSheet } from '../../components/SuggestRouteSheet';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import {
   applyFilters,
@@ -26,7 +27,10 @@ import {
   type SortMode,
 } from '../../lib/filters';
 import { listOverdueDoctors } from '../../lib/reminders';
+import { suggestDailyRoute, type SuggestedDoctor } from '../../lib/suggestions';
 import { colors, spacing } from '../../lib/theme';
+
+const SUGGESTION_LIMIT = 8;
 
 const TABLET_BREAKPOINT = 768;
 
@@ -61,7 +65,32 @@ export default function MapScreen() {
 
   // Ajouter un médecin (depuis la carte ou la liste) crée/complète directement
   // la tournée du jour en base — pas d'étape de "création" séparée à oublier.
-  const { routeId: todayRouteId, selectedIds, count: selectedCount, toggle: toggleSelect } = useTodayRoute(sector?.id);
+  const {
+    routeId: todayRouteId,
+    selectedIds,
+    count: selectedCount,
+    toggle: toggleSelect,
+    addMany: addManyToRoute,
+  } = useTodayRoute(sector?.id);
+
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState<SuggestedDoctor[]>([]);
+
+  async function handleSuggestRoute() {
+    // Position fraîche à l'instant où on demande la suggestion, comme pour le
+    // tri par proximité — sinon on prioriserait depuis une position d'il y a
+    // potentiellement plusieurs minutes.
+    const freshLocation = await refreshLocation();
+    setSuggestions(
+      suggestDailyRoute(doctors, lastVisits, selectedIds, freshLocation ?? location, SUGGESTION_LIMIT),
+    );
+    setShowSuggestions(true);
+  }
+
+  async function handleConfirmSuggestions(doctorIds: string[]) {
+    await addManyToRoute(doctorIds);
+    setShowSuggestions(false);
+  }
 
   const specialites = useMemo(() => distinctSpecialites(doctors), [doctors]);
   const filtered = useMemo(() => applyFilters(doctors, filters, lastVisits), [doctors, filters, lastVisits]);
@@ -190,7 +219,7 @@ export default function MapScreen() {
               selectedIds={selectedIds}
               onDoctorPress={(id) => setQuickViewId(id)}
               centerOn={location}
-              bottomOffset={selectedCount > 0 && !quickViewDoctor ? 64 : 0}
+              bottomOffset={!quickViewDoctor ? 64 : 0}
             />
           ) : (
             listContent
@@ -212,13 +241,26 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {selectedCount > 0 && !quickViewDoctor && (
+      {!quickViewDoctor && (
         <View style={styles.fabBar}>
-          <PrimaryButton label={`Voir ma tournée du jour (${selectedCount})`} onPress={goToTodayRoute} />
+          {selectedCount > 0 ? (
+            <PrimaryButton label={`Voir ma tournée du jour (${selectedCount})`} onPress={goToTodayRoute} />
+          ) : (
+            <PrimaryButton label="Suggérer ma tournée du jour" onPress={handleSuggestRoute} />
+          )}
         </View>
       )}
 
     </SafeAreaView>
+
+    {showSuggestions && (
+      <SuggestRouteSheet
+        suggestions={suggestions}
+        paddingTop={insets.top}
+        onClose={() => setShowSuggestions(false)}
+        onConfirm={handleConfirmSuggestions}
+      />
+    )}
 
     {!isTablet && showFilters && (
       // Superposition affichée en sœur du SafeAreaView (pas à l'intérieur, pour

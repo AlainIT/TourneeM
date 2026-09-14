@@ -96,6 +96,20 @@ export async function addStopToRoute(routeId: string, doctorId: string, ordre: n
   if (error) throw error;
 }
 
+// Ajoute plusieurs arrêts en une fois (ex. tournée suggérée acceptée en bloc).
+// Recalcule l'ordre à partir d'une lecture fraîche des arrêts existants — un
+// appel répété à addStopToRoute avec un `ordre` calculé depuis un état déjà
+// en mémoire (ex. dans une boucle) collisionnerait sur la contrainte
+// unique(route_id, ordre), chaque appel voyant le même "dernier ordre" stale.
+export async function addStopsToRoute(routeId: string, doctorIds: string[]): Promise<void> {
+  if (doctorIds.length === 0) return;
+  const existing = await getRouteStops(routeId);
+  const startOrdre = existing.length ? Math.max(...existing.map((s) => s.ordre)) + 1 : 1;
+  const rows = doctorIds.map((doctor_id, i) => ({ route_id: routeId, doctor_id, ordre: startOrdre + i }));
+  const { error } = await supabase.from('route_stops').insert(rows);
+  if (error) throw error;
+}
+
 export async function removeStopFromRoute(routeId: string, doctorId: string): Promise<void> {
   const { error } = await supabase
     .from('route_stops')

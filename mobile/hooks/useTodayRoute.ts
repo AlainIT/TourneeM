@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  addStopsToRoute,
   addStopToRoute,
   getDraftRouteForDate,
   getOrCreateDraftRouteForDate,
@@ -60,10 +61,22 @@ export function useTodayRoute(sectorId: string | undefined) {
     await invalidate(target.id);
   }
 
+  // Ajout en bloc (ex. tournée suggérée acceptée) : un seul aller-retour base
+  // avec un ordre recalculé proprement, plutôt que d'appeler toggle() en
+  // boucle (qui recalculerait le même "prochain ordre" à partir du même état
+  // local pour chaque médecin et violerait unique(route_id, ordre)).
+  async function addMany(doctorIds: string[]) {
+    if (!sectorId || doctorIds.length === 0) return;
+    const target = route ?? (await getOrCreateDraftRouteForDate(sectorId, date));
+    await addStopsToRoute(target.id, doctorIds);
+    await invalidate(target.id);
+  }
+
   return {
     routeId: route?.id ?? null,
     selectedIds,
     count: selectedIds.size,
     toggle,
+    addMany,
   };
 }
