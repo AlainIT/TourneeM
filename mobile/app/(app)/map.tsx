@@ -43,10 +43,17 @@ export default function MapScreen() {
   const { data: sector } = useSector();
   const { data: doctors = [], isLoading, refetch, isRefetching } = useDoctors(sector?.id);
   const { data: lastVisits = {} } = useLastVisits(sector?.id);
-  const { location } = useUserLocation();
+  const { location, refresh: refreshLocation } = useUserLocation();
 
   const [filters, setFilters] = useState<DoctorFilters>(DEFAULT_FILTERS);
   const [sortMode, setSortMode] = useState<SortMode>('nom');
+  // Le tri par proximité doit refléter la position au moment où on le demande,
+  // pas la dernière position ambiante connue (mise à jour seulement tous les
+  // 50m/15s en tâche de fond) : on force une lecture GPS fraîche à ce moment.
+  function handleSortChange(mode: SortMode) {
+    setSortMode(mode);
+    if (mode === 'proximite') refreshLocation();
+  }
   const [viewMode, setViewMode] = useState<'carte' | 'liste'>('carte');
   const [showFilters, setShowFilters] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -78,7 +85,7 @@ export default function MapScreen() {
       onChange={setFilters}
       specialites={specialites}
       sortMode={sortMode}
-      onSortChange={setSortMode}
+      onSortChange={handleSortChange}
       resultCount={sorted.length}
     />
   );
