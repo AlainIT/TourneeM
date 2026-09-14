@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +28,7 @@ import {
 } from '../../lib/filters';
 import { listOverdueDoctors } from '../../lib/reminders';
 import { suggestDailyRoute, type SuggestedDoctor } from '../../lib/suggestions';
+import { getDrivingMatrix, type DrivingResult } from '../../lib/mapbox';
 import { colors, spacing } from '../../lib/theme';
 
 const SUGGESTION_LIMIT = 8;
@@ -94,7 +95,32 @@ export default function MapScreen() {
 
   const specialites = useMemo(() => distinctSpecialites(doctors), [doctors]);
   const filtered = useMemo(() => applyFilters(doctors, filters, lastVisits), [doctors, filters, lastVisits]);
-  const sorted = useMemo(() => sortDoctors(filtered, sortMode, location), [filtered, sortMode, location]);
+
+  // Temps de trajet réel (route, via Mapbox) pour le tri par proximité — la
+  // liste s'affiche d'abord triée à vol d'oiseau (repli immédiat dans
+  // sortDoctors), puis se réordonne dès que le calcul routier répond.
+  const [drivingByDoctor, setDrivingByDoctor] = useState<Record<string, DrivingResult>>({});
+  useEffect(() => {
+    if (sortMode !== 'proximite' || !location) {
+      setDrivingByDoctor({});
+      return;
+    }
+    let cancelled = false;
+    const destinations = filtered
+      .filter((d) => d.latitude != null && d.longitude != null)
+      .map((d) => ({ id: d.id, lat: d.latitude as number, lon: d.longitude as number }));
+    getDrivingMatrix(location, destinations).then((matrix) => {
+      if (!cancelled) setDrivingByDoctor(matrix);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sortMode, filtered, location]);
+
+  const sorted = useMemo(
+    () => sortDoctors(filtered, sortMode, location, drivingByDoctor),
+    [filtered, sortMode, location, drivingByDoctor],
+  );
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
   const coverage = useMemo(() => computeCoverageByCiblage(doctors, lastVisits), [doctors, lastVisits]);
   const overdueCount = useMemo(() => listOverdueDoctors(doctors, lastVisits).length, [doctors, lastVisits]);

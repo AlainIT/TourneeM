@@ -1,5 +1,6 @@
 import type { Ciblage, Doctor, ModeReception } from './types';
 import type { UserLocation } from '../hooks/useUserLocation';
+import type { DrivingResult } from './mapbox';
 import { isOverdue } from './reminders';
 
 export type VisitStatusFilter = 'all' | 'never' | 'visited' | 'stale' | 'retard';
@@ -72,20 +73,35 @@ export function applyFilters(
   });
 }
 
-export function sortDoctors(doctors: Doctor[], sortMode: SortMode, userLocation: UserLocation | null): Doctor[] {
+// `drivingByDoctor` (temps de trajet réel par la route, via Mapbox) prime sur
+// le vol d'oiseau dès qu'il est disponible pour un médecin donné — la
+// distance géométrique peut mentir sur ce qui est réellement le plus proche
+// en voiture (pas de route directe, sens unique, etc.). Repli automatique
+// sur le vol d'oiseau tant que le calcul routier n'est pas encore arrivé (ou
+// si le token Mapbox n'est pas configuré).
+export function sortDoctors(
+  doctors: Doctor[],
+  sortMode: SortMode,
+  userLocation: UserLocation | null,
+  drivingByDoctor?: Record<string, DrivingResult>,
+): Doctor[] {
   const copy = [...doctors];
   if (sortMode === 'potentiel') {
     return copy.sort((a, b) => (b.potentiel_score ?? -1) - (a.potentiel_score ?? -1));
   }
   if (sortMode === 'proximite' && userLocation) {
+    const distanceKm = (d: Doctor): number => {
+      if (d.latitude == null || d.longitude == null) return Infinity;
+      return haversineKm(userLocation, { lat: d.latitude, lon: d.longitude });
+    };
     return copy.sort((a, b) => {
-      const da = a.latitude != null && a.longitude != null
-        ? haversineKm(userLocation, { lat: a.latitude, lon: a.longitude })
-        : Infinity;
-      const db = b.latitude != null && b.longitude != null
-        ? haversineKm(userLocation, { lat: b.latitude, lon: b.longitude })
-        : Infinity;
-      return da - db;
+      const drivingA = drivingByDoctor?.[a.id];
+      const drivingB = drivingByDoctor?.[b.id];
+      // Comparaison à unité cohérente uniquement : dès que l'un des deux
+      // manque de résultat routier (échec partiel de lot, médecin hors du
+      // calcul en cours), on retombe sur le vol d'oiseau pour CETTE paire.
+      if (drivingA && drivingB) return drivingA.durationMin - drivingB.durationMin;
+      return distanceKm(a) - distanceKm(b);
     });
   }
   return copy.sort((a, b) => a.nom.localeCompare(b.nom));

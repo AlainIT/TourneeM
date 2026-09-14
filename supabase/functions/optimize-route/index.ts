@@ -2,30 +2,38 @@
 //
 // Entrée : { route_id: string, start: { lat: number, lon: number }, end?: { lat: number, lon: number } }
 // Effet : recalcule l'ordre de passage des arrêts de la tournée (route_stops)
-// par plus-proche-voisin + amélioration 2-opt sur distances Haversine, écrit
-// le nouvel ordre ainsi que la distance et la durée estimées sur `routes`.
+// par plus-proche-voisin + amélioration 2-opt, écrit le nouvel ordre ainsi
+// que la distance et la durée estimées sur `routes`.
 //
 // `end` (optionnel, ex. le domicile de la déléguée) fixe le point d'arrivée :
 // le trajet retour est alors inclus dans l'optimisation elle-même (l'ordre des
 // arrêts en tient compte, pas seulement la distance affichée en plus à la fin).
 //
-// V1 : distance à vol d'oiseau majorée d'un facteur de sinuosité (routes réelles),
-// pas d'appel à une API de routage payante. Le facteur et la vitesse moyenne sont
-// volontairement simples (visite en zone urbaine/périurbaine) ; à affiner en V2 si
-// besoin avec un vrai temps de trajet (Mapbox/Google Directions).
+// Coût utilisé pour l'optimisation : distance/durée réelles par la route (API
+// Matrix de Mapbox) quand MAPBOX_TOKEN est configuré et que le nombre de
+// points tient dans une seule requête (25 coordonnées max sur le plan
+// gratuit) ; repli sur une estimation à vol d'oiseau × facteur de sinuosité
+// sinon (token absent, tournée trop grande, ou API indisponible).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const MAPBOX_TOKEN = Deno.env.get("MAPBOX_TOKEN");
 
-const ROAD_SINUOSITY_FACTOR = 1.3; // vol d'oiseau -> estimation route réelle
-const AVERAGE_SPEED_KMH = 35; // vitesse moyenne trajets courts urbains/périurbains
+const ROAD_SINUOSITY_FACTOR = 1.3; // vol d'oiseau -> estimation route réelle (repli uniquement)
+const AVERAGE_SPEED_KMH = 35; // vitesse moyenne trajets courts urbains/périurbains (repli uniquement)
+const MAPBOX_MAX_POINTS = 25; // limite de l'API Matrix Mapbox (plan gratuit)
 
 interface Point {
   id: string;
   lat: number;
   lon: number;
+}
+
+interface CostMatrix {
+  distanceKm: number[][];
+  durationMin: number[][];
 }
 
 function haversineKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
@@ -39,54 +47,88 @@ function haversineKm(a: { lat: number; lon: number }, b: { lat: number; lon: num
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-function nearestNeighborOrder(start: { lat: number; lon: number }, points: Point[]): Point[] {
-  const remaining = [...points];
-  const ordered: Point[] = [];
-  let current = start;
-  while (remaining.length) {
-    let bestIdx = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < remaining.length; i++) {
-      const d = haversineKm(current, remaining[i]);
-      if (d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
+function buildHaversineMatrix(points: { lat: number; lon: number }[]): number[][] {
+  return points.map((a) => points.map((b) => haversineKm(a, b)));
+}
+
+// Matrice complète (tous points x tous points) de distance/durée réelles par
+// la route, en un seul appel. `null` si le token n'est pas configuré, s'il y
+// a trop de points pour une requête, ou si l'API échoue ou ne peut pas
+// relier une paire de points (ex. pas de route routière connue) — dans tous
+// ces cas, l'appelant retombe sur le vol d'oiseau.
+async function buildMapboxMatrix(points: { lat: number; lon: number }[]): Promise<CostMatrix | null> {
+  if (!MAPBOX_TOKEN || points.length < 2 || points.length > MAPBOX_MAX_POINTS) return null;
+
+  const coords = points.map((p) => `${p.lon},${p.lat}`).join(";");
+  const url =
+    `https://api.mapbox.com/directions-matrix/v1/mapbox/driving/${coords}` +
+    `?annotations=distance,duration&access_token=${MAPBOX_TOKEN}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const distancesM: (number | null)[][] | undefined = json.distances;
+    const durationsS: (number | null)[][] | undefined = json.durations;
+    if (!distancesM || !durationsS) return null;
+
+    const n = points.length;
+    const distanceKm: number[][] = [];
+    const durationMin: number[][] = [];
+    for (let i = 0; i < n; i++) {
+      distanceKm.push([]);
+      durationMin.push([]);
+      for (let j = 0; j < n; j++) {
+        const dm = distancesM[i]?.[j];
+        const ds = durationsS[i]?.[j];
+        if (dm == null || ds == null) return null;
+        distanceKm[i].push(dm / 1000);
+        durationMin[i].push(ds / 60);
       }
     }
-    const [next] = remaining.splice(bestIdx, 1);
+    return { distanceKm, durationMin };
+  } catch {
+    return null;
+  }
+}
+
+function nearestNeighborOrder(startIdx: number, candidateIdxs: number[], cost: number[][]): number[] {
+  const remaining = [...candidateIdxs];
+  const ordered: number[] = [];
+  let current = startIdx;
+  while (remaining.length) {
+    let bestPos = 0;
+    let bestCost = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const c = cost[current][remaining[i]];
+      if (c < bestCost) {
+        bestCost = c;
+        bestPos = i;
+      }
+    }
+    const [next] = remaining.splice(bestPos, 1);
     ordered.push(next);
     current = next;
   }
   return ordered;
 }
 
-function tourLength(
-  start: { lat: number; lon: number },
-  order: Point[],
-  end?: { lat: number; lon: number },
-): number {
+function tourCost(startIdx: number, order: number[], cost: number[][], endIdx?: number): number {
   let total = 0;
-  let prev = start;
-  for (const p of order) {
-    total += haversineKm(prev, p);
-    prev = p;
+  let prev = startIdx;
+  for (const idx of order) {
+    total += cost[prev][idx];
+    prev = idx;
   }
-  if (end) total += haversineKm(prev, end);
+  if (endIdx != null) total += cost[prev][endIdx];
   return total;
 }
 
 // Amélioration 2-opt : élimine les croisements évidents de l'itinéraire glouton.
-// Le point d'arrivée fixe (`end`, ex. le domicile) est inclus dans le calcul de
-// longueur à chaque candidat : l'algorithme réordonne donc bien les arrêts pour
-// terminer près de lui plutôt que de l'ignorer jusqu'au trajet retour final.
-function twoOpt(
-  start: { lat: number; lon: number },
-  order: Point[],
-  end?: { lat: number; lon: number },
-): Point[] {
+function twoOpt(startIdx: number, order: number[], cost: number[][], endIdx?: number): number[] {
   let improved = true;
   let best = order;
-  let bestLen = tourLength(start, best, end);
+  let bestCost = tourCost(startIdx, best, cost, endIdx);
 
   while (improved) {
     improved = false;
@@ -97,10 +139,10 @@ function twoOpt(
           ...best.slice(i, j + 1).reverse(),
           ...best.slice(j + 1),
         ];
-        const candidateLen = tourLength(start, candidate, end);
-        if (candidateLen < bestLen - 1e-9) {
+        const candidateCost = tourCost(startIdx, candidate, cost, endIdx);
+        if (candidateCost < bestCost - 1e-9) {
           best = candidate;
-          bestLen = candidateLen;
+          bestCost = candidateCost;
           improved = true;
         }
       }
@@ -140,23 +182,48 @@ Deno.serve(async (req) => {
       .eq("route_id", route_id);
     if (stopsErr) throw stopsErr;
 
-    const points: Point[] = (stops ?? [])
+    const doctorPoints: Point[] = (stops ?? [])
       .filter((s: any) => s.doctors?.latitude != null && s.doctors?.longitude != null)
       .map((s: any) => ({ id: s.doctor_id, lat: s.doctors.latitude, lon: s.doctors.longitude }));
 
-    const missingGeo = (stops ?? []).length - points.length;
-    if (points.length === 0) {
+    const missingGeo = (stops ?? []).length - doctorPoints.length;
+    if (doctorPoints.length === 0) {
       return new Response(
         JSON.stringify({ error: "Aucun médecin géocodé dans cette tournée." }),
         { status: 422 },
       );
     }
 
-    const greedy = nearestNeighborOrder(start, points);
-    const optimized = twoOpt(start, greedy, end);
-    const distanceVolOiseau = tourLength(start, optimized, end);
-    const distanceEstimee = distanceVolOiseau * ROAD_SINUOSITY_FACTOR;
-    const dureeMin = Math.round((distanceEstimee / AVERAGE_SPEED_KMH) * 60);
+    // Index 0 = départ, 1..N = médecins, N+1 = arrivée (domicile) si fournie.
+    const points: { lat: number; lon: number }[] = [start, ...doctorPoints, ...(end ? [end] : [])];
+    const startIdx = 0;
+    const candidateIdxs = doctorPoints.map((_, i) => i + 1);
+    const endIdx = end ? points.length - 1 : undefined;
+
+    const mapboxMatrix = await buildMapboxMatrix(points);
+    const usingRealRouting = mapboxMatrix != null;
+    const distanceMatrix = mapboxMatrix?.distanceKm ?? buildHaversineMatrix(points);
+    // On optimise l'ORDRE sur la durée réelle quand elle existe (plus fidèle
+    // à "éviter de perdre du temps sur la route" que la distance brute) ;
+    // sur le vol d'oiseau, distance et durée sont de toute façon dérivées
+    // l'une de l'autre (facteur fixe), donc optimiser sur l'une ou l'autre
+    // donne le même ordre.
+    const optimizationCost = mapboxMatrix?.durationMin ?? distanceMatrix;
+
+    const greedy = nearestNeighborOrder(startIdx, candidateIdxs, optimizationCost);
+    const optimizedIdxs = twoOpt(startIdx, greedy, optimizationCost, endIdx);
+    const optimized = optimizedIdxs.map((idx) => doctorPoints[idx - 1]);
+
+    let distanceEstimee: number;
+    let dureeMin: number;
+    if (usingRealRouting) {
+      distanceEstimee = tourCost(startIdx, optimizedIdxs, mapboxMatrix!.distanceKm, endIdx);
+      dureeMin = Math.round(tourCost(startIdx, optimizedIdxs, mapboxMatrix!.durationMin, endIdx));
+    } else {
+      const distanceVolOiseau = tourCost(startIdx, optimizedIdxs, distanceMatrix, endIdx);
+      distanceEstimee = distanceVolOiseau * ROAD_SINUOSITY_FACTOR;
+      dureeMin = Math.round((distanceEstimee / AVERAGE_SPEED_KMH) * 60);
+    }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -198,6 +265,7 @@ Deno.serve(async (req) => {
         distance_totale_km: Math.round(distanceEstimee * 10) / 10,
         duree_totale_min: dureeMin,
         medecins_non_geocodes_ignores: missingGeo,
+        mode_calcul: usingRealRouting ? "route_reelle" : "vol_oiseau",
       }),
       { headers: { "Content-Type": "application/json" } },
     );
